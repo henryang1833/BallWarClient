@@ -49,7 +49,7 @@ end
 
 local process_msg = function(msgstr)
     local cmd, msg = str_unpack(msgstr)
-    print("recv [" .. cmd .. "] {" .. table.concat(msg, ",") .. "}")
+    -- print("recv [" .. cmd .. "] {" .. table.concat(msg, ",") .. "}")
     local fun = resp[cmd]
     if not fun then
         print("not fun")
@@ -66,26 +66,25 @@ local process_msg = function(msgstr)
     end
 end
 
-local process_buff = function(readbuff)
-    readbuff = readbuff.."\r\n"
-    print("process_buff:"..readbuff)
-    while true do
-
-        local msgstr, rest = string.match(readbuff, "(.-)\r\n(.*)")
-        if msgstr then
-            print("msgstr:"..msgstr)
-            readbuff = rest
-            process_msg(msgstr)
-        else
-            print("len:"..string.len(readbuff))
-            for i = 1, string.len(readbuff) do
-                local ascii_val = string.byte(readbuff, i)
-                print("Character:", readbuff:sub(i, i), "ASCII:", ascii_val)
-            end
-            return readbuff
-        end
-    end
-end
+-- local process_buff = function(readbuff)
+--     readbuff = readbuff.."\r\n"
+--     -- print("process_buff:"..readbuff)
+--     while true do
+--         local msgstr, rest = string.match(readbuff, "(.-)\r\n(.*)")
+--         if msgstr then
+--             print("msgstr:"..msgstr)
+--             readbuff = rest
+--             process_msg(msgstr)
+--         else
+--             print("len:"..string.len(readbuff))
+--             for i = 1, string.len(readbuff) do
+--                 local ascii_val = string.byte(readbuff, i)
+--                 print("Character:", readbuff:sub(i, i), "ASCII:", ascii_val)
+--             end
+--             return readbuff
+--         end
+--     end
+-- end
 
 local disconnect = function()
     print("断线")
@@ -101,16 +100,16 @@ end
 function recv_loop()
     local recvstr, err = client:receive()
     if recvstr then
-        print(recvstr)
-        readbuff = readbuff .. recvstr
-        print(string.len(readbuff))
-        readbuff = process_buff(readbuff)
+        -- print(recvstr)
+        -- readbuff = readbuff .. recvstr
+        -- print(string.len(readbuff))
+        -- readbuff = process_buff(readbuff)
+        process_msg(recvstr)
     elseif err == "timeout" then
         print("没有数据接收")
     else
         print("接收失败: ", err)
         disconnect()
-        client:close()
     end
 end
 
@@ -130,13 +129,14 @@ function move(x,y)
     client:send("shift,"..x..","..y.."\r\n")
 end
 
+-- todo 
 resp.move = function(msg)
     if not msg then
         print("not msg")
         return
     end
     local idx = 0
-    for i = 1, #ballTable, 1 do
+    for i = 1, #ballTable, 4 do
         print("resp.move ballTable:"..ballTable[i])
         if tonumber(ballTable[i]) == playerid then
             idx = i
@@ -147,12 +147,12 @@ resp.move = function(msg)
         print("idx==0")
         return
     end
-    print("原坐标：")
-    print(table.concat({ballTable[idx],ballTable[idx+1],ballTable[idx+2]},","))
+    -- print("原坐标：")
+    -- print(table.concat({ballTable[idx],ballTable[idx+1],ballTable[idx+2]},","))
     ballTable[idx+1] = msg[3]
     ballTable[idx+2] = msg[4]
-    print("现坐标")
-    print(table.concat({ballTable[idx],ballTable[idx+1],ballTable[idx+2]},","))
+    -- print("现坐标")
+    -- print(table.concat({ballTable[idx],ballTable[idx+1],ballTable[idx+2]},","))
 end
 
 resp.balllist = function(msg)
@@ -162,7 +162,7 @@ resp.balllist = function(msg)
     ballTable = {}
     for i=2,#msg do
         table.insert(ballTable,msg[i])
-        print("resp.balllist:"..msg[i])
+        -- print("resp.balllist:"..msg[i])
     end
 end
 
@@ -182,6 +182,7 @@ resp.addfood = function(msg)
     if not msg then
         return
     end
+    print("resp.addfood:"..table.concat(msg,","))
     for i = 2, #msg, 1 do
         table.insert(foodTable,msg[i])    
     end
@@ -191,15 +192,16 @@ end
 -- todo debug
 resp.eat = function(msg)
     if not msg then
-        print("resp.eat not msg")
+        print("resp.eat:not msg")
         return
     end
+    print("resp.eat:"..table.concat(msg,","))
     local playerid = msg[2]
     local foodid = msg[3]
     local ballsize = msg[4]
     local idx = 0
     -- 改变ball的size
-    for i = 1, #ballTable, 1 do
+    for i = 1, #ballTable, 4 do
         if playerid==ballTable[i] then
             idx = i
             break
@@ -209,7 +211,7 @@ resp.eat = function(msg)
     
     -- 删除被吃的food
     idx = 0
-    for i = 1,#foodTable,1 do
+    for i = 1,#foodTable,4 do
         if foodTable[i] == foodid then
             idx = i
             break

@@ -99,11 +99,12 @@ namespace XLua.CSObjectWrap
                 
                 {
                     UnityEngine.GameObject _prefab = (UnityEngine.GameObject)translator.GetObject(L, 2, typeof(UnityEngine.GameObject));
-                    float _x = (float)LuaAPI.lua_tonumber(L, 3);
-                    float _y = (float)LuaAPI.lua_tonumber(L, 4);
-                    float _scale = (float)LuaAPI.lua_tonumber(L, 5);
+                    int _id = LuaAPI.xlua_tointeger(L, 3);
+                    float _x = (float)LuaAPI.lua_tonumber(L, 4);
+                    float _y = (float)LuaAPI.lua_tonumber(L, 5);
+                    float _scale = (float)LuaAPI.lua_tonumber(L, 6);
                     
-                        var gen_ret = gen_to_be_invoked.CreatePrefab( _prefab, _x, _y, _scale );
+                        var gen_ret = gen_to_be_invoked.CreatePrefab( _prefab, _id, _x, _y, _scale );
                         translator.Push(L, gen_ret);
                     
                     

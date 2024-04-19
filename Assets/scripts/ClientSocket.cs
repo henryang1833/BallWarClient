@@ -26,15 +26,14 @@ public class ClientSocket : MonoBehaviour
     public int[] foodInfo;
     public int foodInfoLen;
     LuaFunction luaMove;
-    public delegate void onFoodEat(int foodId);
     void Start()
     {
         luaEnv = new LuaEnv();
         luaEnv.AddLoader(MyCustomerLoader);
         luaEnv.AddLoader(MyABCustomLoader);
         object[] res = luaEnv.DoString("return require 'clientsocket'");
-        luaEnv.Global.Set("OnFoodEat",(System.Action<int>)OnFoodEat);
-        luaEnv.Global.Set("csObj",this.gameObject);
+        luaEnv.Global.Set("OnFoodEat", (System.Action<int>)OnFoodEat);
+        luaEnv.Global.Set("csObj", this.gameObject);
         foodItem = new Dictionary<int, GameObject>();
         ballItem = new Dictionary<int, GameObject>();
         playerBall = GameObject.Find("PlayerBall");
@@ -51,17 +50,18 @@ public class ClientSocket : MonoBehaviour
         }
         // 获取Lua函数
         luaMove = luaEnv.Global.Get<LuaFunction>("move");
-        
+
     }
 
 
     // 供 Lua 调用的方法，用于创建预制体并设置位置
-    public GameObject CreatePrefab(GameObject prefab, float x, float y, float scale)
+    public GameObject CreatePrefab(GameObject prefab, int id, float x, float y, float scale)
     {
         if (prefab != null)
         {
             GameObject instance = Instantiate(prefab, new Vector3(x, y, 0), Quaternion.identity);
             instance.transform.localScale = Vector3.one * scale;
+            instance.name = string.Format("{0}_{1}",prefab.name,id);
             return instance;
         }
         return null;
@@ -86,8 +86,8 @@ public class ClientSocket : MonoBehaviour
         {
             if (i % 4 == 0)
             {
-                    foodId = Convert.ToInt32(foodInfo[i]);
-                
+                foodId = Convert.ToInt32(foodInfo[i]);
+
             }
             else if (i % 4 == 1)
             {
@@ -102,7 +102,7 @@ public class ClientSocket : MonoBehaviour
                 scale = Convert.ToSingle(foodInfo[i]);
                 if (!foodItem.ContainsKey(foodId))
                 {
-                    GameObject go = CreatePrefab(foodPrefab, x, y, scale);
+                    GameObject go = CreatePrefab(foodPrefab, foodId, x, y, scale);
                     foodItem.Add(foodId, go);
                 }
                 else
@@ -141,7 +141,7 @@ public class ClientSocket : MonoBehaviour
                         go.transform.localScale = Vector3.one * scale;
                     }
                     else
-                        go = CreatePrefab(ballPrefab, x, y, scale);
+                        go = CreatePrefab(ballPrefab, ballId, x, y, scale);
 
                     ballItem.Add(ballId, go);
                 }
@@ -158,7 +158,7 @@ public class ClientSocket : MonoBehaviour
         float verticalInput = Input.GetAxis("Vertical");
         if (horizontalInput != 0 || verticalInput != 0)
         {
-            Debug.Log("horizontalInput:" + horizontalInput+ ",verticalInput:" + verticalInput);
+            Debug.Log("horizontalInput:" + horizontalInput + ",verticalInput:" + verticalInput);
             // 检查函数是否成功获取
             if (luaMove != null)
                 luaMove.Call(Math.Sign(horizontalInput), Math.Sign(verticalInput)); // 调用函数
@@ -196,9 +196,9 @@ public class ClientSocket : MonoBehaviour
     [LuaCallCSharp]
     public void OnFoodEat(int foodId)
     {
-        Debug.Log("OnFoodEat foodId:"+foodId);
         Debug.Assert(foodItem.ContainsKey(foodId));
-        Destroy(foodItem[foodId]);
-        foodItem.Remove(foodId);  
+        Debug.Log("resp.eat:Destory " + foodItem[foodId].name);
+        Destroy(foodItem[foodId]); 
+        foodItem.Remove(foodId);
     }
 }
