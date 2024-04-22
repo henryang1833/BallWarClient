@@ -58,48 +58,113 @@ public class GameProto
         {
             case PROTO_LOGIN:
                 {
+                    Debug.Assert(parts.Length == 4);
                     message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
                     message[ProtoField.PROTO_TYPE] = parts[1];
-                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[3]);
-                    message[ProtoField.REASON] = parts[4];
+                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[2]);
+                    message[ProtoField.REASON] = parts[3];
                 }
                 break;
             case PROTO_ENTER:
                 {
+                    Debug.Assert(parts.Length == 4);
                     message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
                     message[ProtoField.PROTO_TYPE] = parts[1];
-                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[3]);
-                    message[ProtoField.REASON] = parts[4];
+                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[2]);
+                    message[ProtoField.REASON] = parts[3];
                 }
                 break;
             case PROTO_BALL_LIST:
                 {
+                    Debug.Assert((parts.Length - 2) % 5 == 0);
                     message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
                     message[ProtoField.PROTO_TYPE] = parts[1];
                     List<Dictionary<ProtoField, object>> allballsInfo = new List<Dictionary<ProtoField, object>>();
-                    Debug.Assert((parts.Length - 2) % 5 == 0);
                     for (int i = 2; i < parts.Length; i += 5)
                     {
                         Dictionary<ProtoField, object> ballInfo = new Dictionary<ProtoField, object>();
-                        ballInfo[ProtoField.BALL_ID] = parts[i];
-                        ballInfo[ProtoField.BALL_X] = parts[i+1];
-                        ballInfo[ProtoField.BALL_Y] = parts[i+2];
-                        ballInfo[ProtoField.BALL_SIZE] = parts[i+3];
-                        ballInfo[ProtoField.BALL_SCORE] = parts[i+4];
+                        ballInfo[ProtoField.BALL_ID] = int.Parse(parts[i]);
+                        ballInfo[ProtoField.BALL_X] = float.Parse(parts[i + 1]);
+                        ballInfo[ProtoField.BALL_Y] = float.Parse(parts[i + 2]);
+                        ballInfo[ProtoField.BALL_SIZE] = float.Parse(parts[i + 3]);
+                        ballInfo[ProtoField.BALL_SCORE] = int.Parse(parts[i + 4]);
                         allballsInfo.Add(ballInfo);
                     }
                     message[ProtoField.BLL_LIST] = allballsInfo;
+                }
+                break;
+            case PROTO_FOOD_LIST:
+                {
+                    Debug.Assert((parts.Length - 2) % 5 == 0);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                    List<Dictionary<ProtoField, object>> allfoodsInfo = new List<Dictionary<ProtoField, object>>();
+                    for (int i = 2; i < parts.Length; i += 5)
+                    {
+                        Dictionary<ProtoField, object> foodInfo = new Dictionary<ProtoField, object>();
+                        foodInfo[ProtoField.FOOD_ID] = int.Parse(parts[i]);
+                        foodInfo[ProtoField.FOOD_X] = float.Parse(parts[i + 1]);
+                        foodInfo[ProtoField.FOOD_Y] = float.Parse(parts[i + 2]);
+                        foodInfo[ProtoField.FOOD_SIZE] = float.Parse(parts[i + 3]);
+                        foodInfo[ProtoField.FOOD_SCORE] = int.Parse(parts[i + 4]);
+                        allfoodsInfo.Add(foodInfo);
+                    }
+                    message[ProtoField.FOOD_LIST] = allfoodsInfo;
+                }
+                break;
+            case PROTO_MOVE:
+                {
+                    Debug.Assert(parts.Length == 8);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                    message[ProtoField.SESSION_ID] = int.Parse(parts[2]);
+                    message[ProtoField.BALL_ID] = int.Parse(parts[3]);
+                    message[ProtoField.BALL_X] = float.Parse(parts[4]);
+                    message[ProtoField.BALL_Y] = float.Parse(parts[5]);
+                    message[ProtoField.BALL_SIZE] = float.Parse(parts[6]);
+                    message[ProtoField.BALL_SCORE] = int.Parse(parts[7]);
+                }
+                break;
+            case PROTO_EAT:
+                {
+                    Debug.Assert(parts.Length == 14);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                    message[ProtoField.SESSION_ID] = int.Parse(parts[2]);
+                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[3]);
+
+                    message[ProtoField.BALL_ID] = int.Parse(parts[4]);
+                    message[ProtoField.BALL_X] = float.Parse(parts[5]);
+                    message[ProtoField.BALL_Y] = float.Parse(parts[6]);
+                    message[ProtoField.BALL_SIZE] = float.Parse(parts[7]);
+                    message[ProtoField.BALL_SCORE] = int.Parse(parts[8]);
+
+                    message[ProtoField.FOOD_ID] = int.Parse(parts[9]);
+                    message[ProtoField.FOOD_X] = float.Parse(parts[10]);
+                    message[ProtoField.FOOD_Y] = float.Parse(parts[11]);
+                    message[ProtoField.FOOD_SIZE] = float.Parse(parts[12]);
+                    message[ProtoField.FOOD_SCORE] = int.Parse(parts[13]);
 
                 }
                 break;
-            case PROTO_FOOD_LIST: break;
-            case PROTO_MOVE: break;
-            case PROTO_EAT: break;
-            case PROTO_LEAVE: break;
-            case PROTO_KICK: break;
+            case PROTO_LEAVE:
+                {
+                    Debug.Assert(parts.Length == 3);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                    message[ProtoField.BALL_ID] = int.Parse(parts[2]);
+                }
+                break;
+            case PROTO_KICK:
+                {
+                    Debug.Assert(parts.Length == 2);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                }
+                break;
+            default :
+             throw new Exception("got unexcepted proto type!");
         }
-
-        throw new NotImplementedException();
 
         return message;
     }

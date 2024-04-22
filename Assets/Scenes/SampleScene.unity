@@ -226,6 +226,7 @@ GameObject:
   - component: {fileID: 617929922}
   - component: {fileID: 617929923}
   - component: {fileID: 617929924}
+  - component: {fileID: 617929925}
   m_Layer: 0
   m_Name: ClientSocket
   m_TagString: Untagged
@@ -255,7 +256,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 617929921}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ba0eebb91c4bc5246ad4e8c24198dbfc, type: 3}
   m_Name: 
@@ -263,6 +264,9 @@ MonoBehaviour:
   foodPrefab: {fileID: 2011071953051402172, guid: 80fc531254b2d9c4893dc4bc40e7b2fb, type: 3}
   ballPrefab: {fileID: 2238525571908016701, guid: 332847a10bffd9d4a8837401670468f0, type: 3}
   playerBall: {fileID: 0}
+  playerBallId: 0
+  playerName: 
+  playerPasswd: 
   game_status: 0
   foodInfo: 
   foodInfoLen: 0
@@ -278,6 +282,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4900b9f6b40070a488d447f9713ea14e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &617929925
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 617929921}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 06225d0d930a5d54b97c11b969624726, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  foodPrefab: {fileID: 2011071953051402172, guid: 80fc531254b2d9c4893dc4bc40e7b2fb, type: 3}
+  ballPrefab: {fileID: 2238525571908016701, guid: 332847a10bffd9d4a8837401670468f0, type: 3}
+  game_status: 0
 --- !u!1 &1844568249
 GameObject:
   m_ObjectHideFlags: 0

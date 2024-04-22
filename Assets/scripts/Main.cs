@@ -1,18 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.RegularExpressions;
-using Unity.VisualScripting;
-using UnityEditor;
-using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.Assertions;
-using XLuaTest;
 public class Main : MonoBehaviour
 {
     public GameObject foodPrefab;
@@ -23,6 +16,7 @@ public class Main : MonoBehaviour
     private int playerBallId;
     private string gateIP;
     private int gatePort;
+    //消息队列
     private Queue<Dictionary<ProtoField, object>> messages;
 
     private string messageBuf;
@@ -37,6 +31,13 @@ public class Main : MonoBehaviour
     {
         KICK
     }
+    //记录运行过程中的ball
+    private Dictionary<int, GameObject> ballRunDict;
+    //记录运行过程中的food
+    private Dictionary<int, GameObject> foodRunDict;
+    private Dictionary<int, int> ballScoreDict;
+
+    private Dictionary<int, int> foodScoreDict;
 
     // Start is called before the first frame update
     void Start()
@@ -45,10 +46,14 @@ public class Main : MonoBehaviour
         playerPass = "123";
         gateIP = "192.168.3.113";
         gatePort = 8001;
+        messageBuf = "";
+        ballRunDict = new Dictionary<int, GameObject>();
+        foodRunDict = new Dictionary<int, GameObject>();
+        ballScoreDict = new Dictionary<int, int>();
+        foodScoreDict = new Dictionary<int, int>();
+        messages = new Queue<Dictionary<ProtoField, object>>();
         game_status = GAME_STATUS.CONNECT_TO_GATE;
         isDoing = false;
-        messageBuf = "";
-        messages = new Queue<Dictionary<ProtoField, object>>();
     }
 
     // Update is called once per frame
@@ -160,6 +165,7 @@ public class Main : MonoBehaviour
         while (messages.Count != 0)
         {
             Dictionary<ProtoField, object> message = messages.Dequeue();
+            Debug.Assert(message != null && message[ProtoField.PROTO_TYPE] != null);
             switch (message[ProtoField.PROTO_TYPE])
             {
                 case GameProto.PROTO_BALL_LIST:
@@ -169,7 +175,7 @@ public class Main : MonoBehaviour
                     DoFoodList(message);
                     break;
                 case GameProto.PROTO_MOVE:
-                    DoMoveInput(message);
+                    DoMove(message);
                     break;
                 case GameProto.PROTO_EAT:
                     DoEat(message);
@@ -205,15 +211,113 @@ public class Main : MonoBehaviour
 
     private void DoBallList(Dictionary<ProtoField, object> message)
     {
-        throw new NotImplementedException();
+        Debug.Assert(message.ContainsKey(ProtoField.BLL_LIST));
+        List<Dictionary<ProtoField, object>> balllist = (List<Dictionary<ProtoField, object>>)message[ProtoField.BLL_LIST];
+        Debug.Assert(balllist != null && balllist.Count > 0);
+        foreach (var ball in balllist)
+        {
+            int id = (int)ball[ProtoField.BALL_ID];
+
+            GameObject go;
+            if (!ballRunDict.ContainsKey(id))
+            {
+                go = Instantiate(ballPrefab);
+                ballRunDict[id] = go;
+            }
+
+            go = ballRunDict[id];
+
+            UpdateBall(go, ball);
+        }
+    }
+
+    private void UpdateBall(GameObject go, Dictionary<ProtoField, object> ball)
+    {
+        int id = (int)ball[ProtoField.BALL_ID];
+        float x = (float)ball[ProtoField.BALL_X];
+        float y = (float)ball[ProtoField.BALL_Y];
+        float size = (float)ball[ProtoField.BALL_SIZE];
+        int score = (int)ball[ProtoField.BALL_SCORE];
+        Vector2 pos = new Vector2(x, y);
+
+        go.transform.position = pos;
+        go.transform.localScale = Vector2.one * size;
+        go.name = $"{ballPrefab.name}_{id}";
+
+        ballScoreDict[id] = score;
     }
 
     private void DoFoodList(Dictionary<ProtoField, object> message)
     {
+        Debug.Assert(message.ContainsKey(ProtoField.FOOD_LIST));
+        List<Dictionary<ProtoField, object>> foodlist = (List<Dictionary<ProtoField, object>>)message[ProtoField.FOOD_LIST];
+        Debug.Assert(foodlist != null && foodlist.Count > 0);
+        foreach (var food in foodlist)
+        {
+            int id = (int)food[ProtoField.FOOD_ID];
+
+            GameObject go;
+            if (!foodRunDict.ContainsKey(id))
+            {
+                go = Instantiate(foodPrefab);
+                foodRunDict[id] = go;
+            }
+
+            go = foodRunDict[id];
+
+            UpdateFood(go, food);
+        }
+    }
+
+    private void UpdateFood(GameObject go, Dictionary<ProtoField, object> food)
+    {
+        int id = (int)food[ProtoField.FOOD_ID];
+        float x = (float)food[ProtoField.FOOD_X];
+        float y = (float)food[ProtoField.FOOD_Y];
+        float size = (float)food[ProtoField.FOOD_SIZE];
+        int score = (int)food[ProtoField.FOOD_SCORE];
+        Vector2 pos = new Vector2(x, y);
+
+        go.transform.position = pos;
+        go.transform.localScale = Vector2.one * size;
+        go.name = $"{foodPrefab.name}_{id}";
+
+        foodScoreDict[id] = score;
+    }
+
+    private void DoMove(Dictionary<ProtoField, object> ball)
+    {
+        Debug.Assert(ball.Count == 8);
+        int id = (int)ball[ProtoField.BALL_ID];
+        if (id == playerBallId)
+        {
+            //1.依据权威值更新ball的状态
+            GameObject go;
+            if (!ballRunDict.ContainsKey(id))
+            {
+                go = Instantiate(ballPrefab);
+                ballRunDict[id] = go;
+            }
+            go = ballRunDict[id];
+            UpdateBall(go, ball);
+
+            //2.处理pending_state
+            ServerReconciliation();
+        }else
+        {
+            //3.其他球插值处理
+            ReadyInterpolationData();
+        }
+         
         throw new NotImplementedException();
     }
 
-    private void DoMoveInput(Dictionary<ProtoField, object> message)
+    private void ReadyInterpolationData()
+    {
+        throw new NotImplementedException();
+    }
+
+    private void ServerReconciliation()
     {
         throw new NotImplementedException();
     }
@@ -245,13 +349,14 @@ public class Main : MonoBehaviour
                 throw new Exception("requestCode:got unexcepted code value");
         }
     }
+    
     //进入游戏场景成功回调函数
     private void OnEnterSuccess()
     {
         game_status = GAME_STATUS.RUNNING;
         isDoing = true;
     }
-
+    
     //登录成功回调函数
     private void onLoginSuccess()
     {
