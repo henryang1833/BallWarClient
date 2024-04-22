@@ -5,7 +5,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
-using UnityEngine.Assertions;
 public class Main : MonoBehaviour
 {
     public GameObject foodPrefab;
@@ -16,6 +15,7 @@ public class Main : MonoBehaviour
     private int playerBallId;
     private string gateIP;
     private int gatePort;
+    private float speed;
     //消息队列
     private Queue<Dictionary<ProtoField, object>> messages;
 
@@ -39,6 +39,8 @@ public class Main : MonoBehaviour
 
     private Dictionary<int, int> foodScoreDict;
 
+    private LinkedList<Dictionary<ProtoField, object>> pedingInput;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -47,11 +49,13 @@ public class Main : MonoBehaviour
         gateIP = "192.168.3.113";
         gatePort = 8001;
         messageBuf = "";
+        playerBallId = int.Parse(playerName);
         ballRunDict = new Dictionary<int, GameObject>();
         foodRunDict = new Dictionary<int, GameObject>();
         ballScoreDict = new Dictionary<int, int>();
         foodScoreDict = new Dictionary<int, int>();
         messages = new Queue<Dictionary<ProtoField, object>>();
+        pedingInput = new LinkedList<Dictionary<ProtoField, object>>();
         game_status = GAME_STATUS.CONNECT_TO_GATE;
         isDoing = false;
     }
@@ -154,8 +158,56 @@ public class Main : MonoBehaviour
         throw new NotImplementedException();
     }
 
+
     private void ProcessUserInput()
     {
+        float inputX = Input.GetAxis("Horizontal");
+        float inputY = Input.GetAxis("Vertical");
+        float deltaTime = Time.deltaTime;
+        if (inputX != 0 || inputY != 0)
+        {
+            int sessionId = GameProto.SessionId;
+            string input = GameProto.MoveProto(playerBallId, sessionId, inputX, inputY, deltaTime);
+            //1.向服务器发送消息
+            Send(input);
+
+            //2.放入pendingInput
+            Dictionary<ProtoField, object> inputCopy = new Dictionary<ProtoField, object>();
+            inputCopy[ProtoField.SESSION_ID] = sessionId;
+            inputCopy[ProtoField.PROTO_TYPE] = GameProto.PROTO_MOVE;
+            inputCopy[ProtoField.INPUT_X] = inputX;
+            inputCopy[ProtoField.INPUT_Y] = inputY;
+            inputCopy[ProtoField.DEALT_TIME] = deltaTime;
+            pedingInput.AddLast(inputCopy);
+            //3.客户端预测
+            ApplyInput(inputCopy);
+        }
+    }
+
+    private void ApplyInput(Dictionary<ProtoField, object> input)
+    {
+        switch (input[ProtoField.PROTO_TYPE])
+        {
+            case GameProto.PROTO_MOVE:
+                {
+                    float inputX = (float)input[ProtoField.INPUT_X];
+                    float inputY = (float)input[ProtoField.INPUT_Y];
+                    float deltaTime = (float)input[ProtoField.DEALT_TIME];
+                    if (ballRunDict.ContainsKey(playerBallId)) //存活才移动预测
+                    {
+                        Transform transform = ballRunDict[playerBallId].transform;
+                        transform.Translate(new Vector2(inputX, inputY) * speed * deltaTime);
+                    }
+                }
+                break;
+            case GameProto.PROTO_EAT:
+                {
+                    int foodId = (int)input[ProtoField.FOOD_ID];
+                    //todo 待补充
+                }
+                break;
+            case GameProto.PROTO_KILL: break;
+        }
         throw new NotImplementedException();
     }
 
@@ -303,12 +355,13 @@ public class Main : MonoBehaviour
 
             //2.处理pending_state
             ServerReconciliation();
-        }else
+        }
+        else
         {
-            //3.其他球插值处理
+            //3.为其他球准备插值数据
             ReadyInterpolationData();
         }
-         
+
         throw new NotImplementedException();
     }
 
@@ -349,14 +402,14 @@ public class Main : MonoBehaviour
                 throw new Exception("requestCode:got unexcepted code value");
         }
     }
-    
+
     //进入游戏场景成功回调函数
     private void OnEnterSuccess()
     {
         game_status = GAME_STATUS.RUNNING;
         isDoing = true;
     }
-    
+
     //登录成功回调函数
     private void onLoginSuccess()
     {

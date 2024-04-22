@@ -1,15 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Unity.Burst.CompilerServices;
-using Unity.VisualScripting;
-using UnityEngine.Assertions;
 
 public enum ProtoField
 {
     SESSION_ID, TIME_STAMP, PROTO_TYPE, REQUEST_CODE, REASON,
     BALL_ID, BALL_X, BALL_Y, BALL_SIZE, BALL_SCORE, BLL_LIST,
-    FOOD_ID, FOOD_X, FOOD_Y, FOOD_SIZE, FOOD_SCORE, FOOD_LIST
+    FOOD_ID, FOOD_X, FOOD_Y, FOOD_SIZE, FOOD_SCORE, FOOD_LIST,
+    INPUT_X,INPUT_Y,DEALT_TIME,
 }
 
 public class GameProto
@@ -22,9 +20,18 @@ public class GameProto
     public const string PROTO_KICK = "kick";
     public const string PROTO_LEAVE = "leave";
     public const string PROTO_EAT = "eat";
+    public const string PROTO_KILL = "kill";
     public const string PROTO_BALL_LIST = "balllist";
     public const string PROTO_FOOD_LIST = "foodlist";
     public static string separator = "\r\n";
+    public static int sessionId = 0;
+    public static int SessionId
+    {
+        get
+        {
+            return sessionId++;
+        }
+    }
     public static string LoginProto(string name, string pass)
     {
         return $"{Now()},{PROTO_LOGIN},{name},{pass}{separator}";
@@ -162,8 +169,8 @@ public class GameProto
                     message[ProtoField.PROTO_TYPE] = parts[1];
                 }
                 break;
-            default :
-             throw new Exception("got unexcepted proto type!");
+            default:
+                throw new Exception("got unexcepted proto type!");
         }
 
         return message;
@@ -180,5 +187,10 @@ public class GameProto
         // 计算从1970年1月1日至今的时间差（毫秒数）
         long timestamp = (long)(now - epoch).TotalSeconds;
         return timestamp;
+    }
+
+    public static string MoveProto(int playerBallId, int sessionId, float inputX, float inputY, float deltaTime)
+    {
+        return $"{Now()},{PROTO_MOVE},{playerBallId},{sessionId},{inputX},{inputY},{deltaTime}{separator}";
     }
 }
