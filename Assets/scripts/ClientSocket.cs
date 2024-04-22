@@ -15,6 +15,10 @@ public class ClientSocket : MonoBehaviour
     public GameObject foodPrefab; // 将预制体拖拽到这个公共变量上
     public GameObject ballPrefab; // 将预制体拖拽到这个公共变量上
     public GameObject playerBall;
+
+    public int playerBallId;  // 玩家球ID
+    public string playerName;
+    public string playerPasswd;
     public enum GAME_STATUS
     {
         Login = 0, Enter = 1, Running = 2, LogOut = 3
