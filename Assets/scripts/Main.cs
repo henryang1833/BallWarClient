@@ -9,6 +9,7 @@ public class Main : MonoBehaviour
 {
     public GameObject foodPrefab;
     public GameObject ballPrefab;
+    public GameObject playerBall;
     private Socket socket;
     private string playerName;
     private string playerPass;
@@ -161,6 +162,58 @@ public class Main : MonoBehaviour
 
     private void ProcessUserInput()
     {
+        if (!ballRunDict.ContainsKey(playerBallId))
+            return;
+        DoPredictMove();
+        DoPredictEat();
+        DoPredictKill();
+    }
+
+    private void DoPredictKill()
+    {
+        foreach (var pair in ballRunDict)
+        {
+            if (pair.Key == playerBallId) continue;
+            if (pair.Value.activeSelf && CheckCollide(pair.Value, playerBall))
+            {
+                int sessionId = GameProto.SessionId;
+                string input = GameProto.KillProto(playerBallId, sessionId, pair.Key);
+                Send(input);
+
+                Dictionary<ProtoField, object> inputCopy = new Dictionary<ProtoField, object>();
+                inputCopy[ProtoField.SESSION_ID] = sessionId;
+                inputCopy[ProtoField.PROTO_TYPE] = GameProto.PROTO_KILL;
+                inputCopy[ProtoField.BALL_ID] = pair.Key;
+                pedingInput.AddLast(inputCopy);
+
+                ApplyInput(inputCopy);
+            }
+        }
+    }
+
+    private void DoPredictEat()
+    {
+        foreach (var pair in foodRunDict)
+        {
+            if (pair.Value.activeSelf && CheckCollide(pair.Value, playerBall))
+            {
+                int sessionId = GameProto.SessionId;
+                string input = GameProto.EatProto(playerBallId, sessionId, pair.Key);
+                Send(input);
+
+                Dictionary<ProtoField, object> inputCopy = new Dictionary<ProtoField, object>();
+                inputCopy[ProtoField.SESSION_ID] = sessionId;
+                inputCopy[ProtoField.PROTO_TYPE] = GameProto.PROTO_EAT;
+                inputCopy[ProtoField.FOOD_ID] = pair.Key;
+                pedingInput.AddLast(inputCopy);
+
+                ApplyInput(inputCopy);
+            }
+        }
+    }
+
+    private void DoPredictMove()
+    {
         float inputX = Input.GetAxis("Horizontal");
         float inputY = Input.GetAxis("Vertical");
         float deltaTime = Time.deltaTime;
@@ -179,9 +232,27 @@ public class Main : MonoBehaviour
             inputCopy[ProtoField.INPUT_Y] = inputY;
             inputCopy[ProtoField.DEALT_TIME] = deltaTime;
             pedingInput.AddLast(inputCopy);
+
             //3.客户端预测
             ApplyInput(inputCopy);
         }
+    }
+
+    private bool CheckCollide(GameObject go1, GameObject go2)
+    {
+        Transform transform1 = go1.transform;
+        Transform transform2 = go2.transform;
+
+        Vector2 pos1 = transform1.position;
+        Vector2 pos2 = transform2.position;
+
+        float r1 = transform1.localScale.x / 2;
+        float r2 = transform2.localScale.x / 2;
+
+        if (Vector2.Distance(pos1, pos2) <= r1 + r2)
+            return true;
+        else
+            return false;
     }
 
     private void ApplyInput(Dictionary<ProtoField, object> input)
@@ -203,12 +274,40 @@ public class Main : MonoBehaviour
             case GameProto.PROTO_EAT:
                 {
                     int foodId = (int)input[ProtoField.FOOD_ID];
-                    //todo 待补充
+                    //1.更新分数
+                    ballScoreDict[playerBallId] += foodScoreDict[foodId];
+                    //2.更新大小
+                    playerBall.transform.localScale = Vector2.one * ballScoreDict[playerBallId] * 0.1f;
+                    //3.将food隐藏
+                    foodRunDict[foodId].SetActive(false);
                 }
                 break;
-            case GameProto.PROTO_KILL: break;
+            case GameProto.PROTO_KILL:
+                {
+                    int ballId = (int)input[ProtoField.BALL_ID];
+                    if (ballScoreDict[playerBallId] >= ballScoreDict[ballId])
+                    {
+                        //1.更新分数
+                        ballScoreDict[playerBallId] += ballScoreDict[ballId];
+                        //2.更新大小
+                        playerBall.transform.localScale = Vector2.one * ballScoreDict[playerBallId] * 0.1f;
+                        //3.将food隐藏
+                        ballRunDict[ballId].SetActive(false);
+                    }
+                    else
+                    {
+                        //1.更新分数
+                        ballScoreDict[ballId] += ballScoreDict[playerBallId];
+                        //2.更新大小
+                        ballRunDict[ballId].transform.localScale = Vector2.one * ballScoreDict[ballId] * 0.1f;
+                        //3.将food隐藏
+                        playerBall.SetActive(false);
+                    }
+                }
+                break;
+            default:
+                throw new Exception("got unexcepted value!");
         }
-        throw new NotImplementedException();
     }
 
     private void ProcessServerInput()
@@ -273,7 +372,10 @@ public class Main : MonoBehaviour
             GameObject go;
             if (!ballRunDict.ContainsKey(id))
             {
-                go = Instantiate(ballPrefab);
+                if (id == playerBallId)
+                    go = playerBall;
+                else
+                    go = Instantiate(ballPrefab);
                 ballRunDict[id] = go;
             }
 

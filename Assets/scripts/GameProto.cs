@@ -193,4 +193,14 @@ public class GameProto
     {
         return $"{Now()},{PROTO_MOVE},{playerBallId},{sessionId},{inputX},{inputY},{deltaTime}{separator}";
     }
+
+    public static string EatProto(int playerBallId, int sessionId, int foodId)
+    {
+        return $"{Now()},{PROTO_EAT},{playerBallId},{sessionId},{foodId}{separator}";
+    }
+
+    public static string KillProto(int playerBallId, int sessionId, int secondBallId)
+    {
+        return $"{Now()},{PROTO_KILL},{playerBallId},{sessionId},{secondBallId}{separator}";
+    }
 }
