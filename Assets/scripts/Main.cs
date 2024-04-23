@@ -164,7 +164,6 @@ public class Main : MonoBehaviour
         throw new NotImplementedException();
     }
 
-
     private void ProcessUserInput()
     {
         if (!ballRunDict.ContainsKey(playerBallId))
@@ -344,16 +343,12 @@ public class Main : MonoBehaviour
                     break;
                 case GameProto.PROTO_KICK:
                     DoKick(message);
-                    break;
+                    return;
                 default:
                     throw new Exception("got unexcepted proto type");
             }
         }
-
-        throw new NotImplementedException();
     }
-
-
 
     private void DoBallList(Dictionary<ProtoField, object> message)
     {
@@ -532,6 +527,8 @@ public class Main : MonoBehaviour
                 ballScoreDict[bid] = score;
             }
 
+            if (!ballRunDict.ContainsKey(bid))
+                return;
             //处理pending
             int lastSessionId = (int)message[ProtoField.SESSION_ID];
             ServerReconciliation(lastSessionId);
@@ -541,7 +538,7 @@ public class Main : MonoBehaviour
             Debug.Assert((int)message[ProtoField.REQUEST_CODE] == 0);
 
             if (ballRunDict.ContainsKey(bid))//其他玩家若存活则延迟更新
-                StartCoroutine(LagUpdateBall(bid, serverUpdateRate));
+                StartCoroutine(LagUpdateBall(bid, serverUpdateRate, message));
             else    //否则，只更新分数
             {
                 int score = (int)message[ProtoField.BALL_SCORE];
@@ -566,28 +563,93 @@ public class Main : MonoBehaviour
         foodRunDict.Remove(fid);
     }
 
-    private IEnumerator LagUpdateBall(int bid, int serverUpdateRate)
+    private IEnumerator LagUpdateBall(int bid, int serverUpdateRate, Dictionary<ProtoField, object> message)
     {
         yield return new WaitForSeconds(1.0f / serverUpdateRate);
 
-        throw new NotImplementedException();
+        UpdateBall(ballRunDict[bid], message);
     }
 
     private void DoKill(Dictionary<ProtoField, object> message)
     {
-        throw new NotImplementedException();
+        int bid = (int)message[ProtoField.BALL_ID];
+        int fid = (int)message[ProtoField.FOOD_ID];
+        int code = (int)message[ProtoField.REQUEST_CODE];
+        if (code == 1) //未发生，一定是本玩家球
+        {
+            Debug.Assert(bid == playerBallId);
+            //更新ball
+            if (ballRunDict.ContainsKey(bid)) //本文家存活则更新
+                UpdateBall(playerBall, message);
+            //恢复second ball
+            if (foodRunDict.ContainsKey(fid))
+                foodRunDict[fid].SetActive(true);
+
+            if (!ballRunDict.ContainsKey(bid))
+                return;
+            //处理pending
+            int lastSessionId = (int)message[ProtoField.SESSION_ID];
+            ServerReconciliation(lastSessionId);
+        }
+        else //发生kill事件
+        {
+            if (bid == playerBallId) //本玩家的吃
+            {
+                if (ballRunDict.ContainsKey(bid)) //本文家存活则更新
+                    UpdateBall(playerBall, message);
+
+                //更新foodBall
+                if (ballRunDict.ContainsKey(fid))
+                {
+                    Destroy(ballRunDict[fid]);
+                    ballRunDict.Remove(fid);
+                }
+
+                //玩家死亡，只更新分数
+                int score = (int)message[ProtoField.BALL_SCORE];
+                ballScoreDict[bid] = score;
+
+                if (!ballRunDict.ContainsKey(bid))
+                    return;
+                //处理pending
+                int lastSessionId = (int)message[ProtoField.SESSION_ID];
+                ServerReconciliation(lastSessionId);
+            }
+            else //其他玩家球的吃
+            {
+                if (ballRunDict.ContainsKey(bid))//其他玩家若存活则延迟更新
+                    StartCoroutine(LagUpdateBall(bid, serverUpdateRate, message));
+                else    //否则，只更新分数
+                {
+                    int score = (int)message[ProtoField.BALL_SCORE];
+                    StartCoroutine(LagUpdateScore(bid, score));
+                }
+
+                if (ballRunDict.ContainsKey(fid))//延迟删除foodBall
+                    StartCoroutine(LagRemoveFoodBall(fid, serverUpdateRate));
+            }
+        }
+    }
+
+    private IEnumerator LagRemoveFoodBall(int fid, int serverUpdateRate)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
+        Destroy(ballRunDict[fid]);
+        ballRunDict.Remove(fid);
     }
 
     private void DoKick(Dictionary<ProtoField, object> message)
     {
-        throw new NotImplementedException();
+        game_status = GAME_STATUS.LOG_OUT;
+        isDoing = false;
     }
 
     private void DoLeave(Dictionary<ProtoField, object> message)
     {
-        throw new NotImplementedException();
+        int id = (int)message[ProtoField.BALL_ID];
+        if (ballRunDict.ContainsKey(id))
+            StartCoroutine(LagRemoveFoodBall(id, serverUpdateRate));
     }
-
 
     //进入游戏场景
     private IEnumerator Enter(Action onEnterSuccess)
@@ -659,11 +721,6 @@ public class Main : MonoBehaviour
             default:
                 throw new Exception("requestCode:got unexcepted code value");
         }
-    }
-
-    private void OnKick()
-    {
-        throw new NotImplementedException();
     }
 
     void Send(string data)

@@ -134,7 +134,7 @@ public class GameProto
                 break;
             case PROTO_EAT:
                 {
-                    Debug.Assert(parts.Length == 14);
+                    Debug.Assert(parts.Length == 10);
                     message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
                     message[ProtoField.PROTO_TYPE] = parts[1];
                     message[ProtoField.SESSION_ID] = int.Parse(parts[2]);
@@ -146,6 +146,29 @@ public class GameProto
                     message[ProtoField.BALL_SIZE] = float.Parse(parts[7]);
                     message[ProtoField.BALL_SCORE] = int.Parse(parts[8]);
 
+                    message[ProtoField.FOOD_ID] = int.Parse(parts[9]);
+                    // message[ProtoField.FOOD_X] = float.Parse(parts[10]);
+                    // message[ProtoField.FOOD_Y] = float.Parse(parts[11]);
+                    // message[ProtoField.FOOD_SIZE] = float.Parse(parts[12]);
+                    // message[ProtoField.FOOD_SCORE] = int.Parse(parts[13]);
+
+                }
+                break;
+            case PROTO_KILL:
+                {
+                    Debug.Assert(parts.Length == 10);
+                    message[ProtoField.TIME_STAMP] = long.Parse(parts[0]);
+                    message[ProtoField.PROTO_TYPE] = parts[1];
+                    message[ProtoField.SESSION_ID] = int.Parse(parts[2]);
+                    message[ProtoField.REQUEST_CODE] = int.Parse(parts[3]);//0发生kill事件 1：未发生
+
+                    message[ProtoField.BALL_ID] = int.Parse(parts[4]);
+                    message[ProtoField.BALL_X] = float.Parse(parts[5]);
+                    message[ProtoField.BALL_Y] = float.Parse(parts[6]);
+                    message[ProtoField.BALL_SIZE] = float.Parse(parts[7]);
+                    message[ProtoField.BALL_SCORE] = int.Parse(parts[8]);
+
+                    //第二个球，被吃的一方
                     message[ProtoField.FOOD_ID] = int.Parse(parts[9]);
                     // message[ProtoField.FOOD_X] = float.Parse(parts[10]);
                     // message[ProtoField.FOOD_Y] = float.Parse(parts[11]);
