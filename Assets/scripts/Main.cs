@@ -17,6 +17,7 @@ public class Main : MonoBehaviour
     private string gateIP;
     private int gatePort;
     private float speed;
+    private int serverUpdateRate;
     //消息队列
     private Queue<Dictionary<ProtoField, object>> messages;
 
@@ -40,6 +41,9 @@ public class Main : MonoBehaviour
 
     private Dictionary<int, int> foodScoreDict;
 
+    //其他球的位置缓冲区，以便插值
+    private Dictionary<int, List<Dictionary<ProtoField, object>>> otherBallPosBuffer;
+
     private LinkedList<Dictionary<ProtoField, object>> pedingInput;
 
     // Start is called before the first frame update
@@ -57,6 +61,7 @@ public class Main : MonoBehaviour
         foodScoreDict = new Dictionary<int, int>();
         messages = new Queue<Dictionary<ProtoField, object>>();
         pedingInput = new LinkedList<Dictionary<ProtoField, object>>();
+        otherBallPosBuffer = new Dictionary<int, List<Dictionary<ProtoField, object>>>();
         game_status = GAME_STATUS.CONNECT_TO_GATE;
         isDoing = false;
     }
@@ -331,6 +336,9 @@ public class Main : MonoBehaviour
                 case GameProto.PROTO_EAT:
                     DoEat(message);
                     break;
+                case GameProto.PROTO_KILL:
+                    DoKill(message);
+                    break;
                 case GameProto.PROTO_LEAVE:
                     DoLeave(message);
                     break;
@@ -345,20 +353,7 @@ public class Main : MonoBehaviour
         throw new NotImplementedException();
     }
 
-    private void DoKick(Dictionary<ProtoField, object> message)
-    {
-        throw new NotImplementedException();
-    }
 
-    private void DoLeave(Dictionary<ProtoField, object> message)
-    {
-        throw new NotImplementedException();
-    }
-
-    private void DoEat(Dictionary<ProtoField, object> message)
-    {
-        throw new NotImplementedException();
-    }
 
     private void DoBallList(Dictionary<ProtoField, object> message)
     {
@@ -385,13 +380,13 @@ public class Main : MonoBehaviour
         }
     }
 
-    private void UpdateBall(GameObject go, Dictionary<ProtoField, object> ball)
+    private void UpdateBall(GameObject go, Dictionary<ProtoField, object> ballStatus)
     {
-        int id = (int)ball[ProtoField.BALL_ID];
-        float x = (float)ball[ProtoField.BALL_X];
-        float y = (float)ball[ProtoField.BALL_Y];
-        float size = (float)ball[ProtoField.BALL_SIZE];
-        int score = (int)ball[ProtoField.BALL_SCORE];
+        int id = (int)ballStatus[ProtoField.BALL_ID];
+        float x = (float)ballStatus[ProtoField.BALL_X];
+        float y = (float)ballStatus[ProtoField.BALL_Y];
+        float size = (float)ballStatus[ProtoField.BALL_SIZE];
+        int score = (int)ballStatus[ProtoField.BALL_SCORE];
         Vector2 pos = new Vector2(x, y);
 
         go.transform.position = pos;
@@ -439,13 +434,13 @@ public class Main : MonoBehaviour
         foodScoreDict[id] = score;
     }
 
-    private void DoMove(Dictionary<ProtoField, object> ball)
+    private void DoMove(Dictionary<ProtoField, object> ballStatus)
     {
-        Debug.Assert(ball.Count == 8);
-        int id = (int)ball[ProtoField.BALL_ID];
+        Debug.Assert(ballStatus.Count == 8);
+        int id = (int)ballStatus[ProtoField.BALL_ID];
         if (id == playerBallId)
         {
-            //1.依据权威值更新ball的状态
+            //1. 依据权威值更新ball的状态
             GameObject go;
             if (!ballRunDict.ContainsKey(id))
             {
@@ -453,29 +448,146 @@ public class Main : MonoBehaviour
                 ballRunDict[id] = go;
             }
             go = ballRunDict[id];
-            UpdateBall(go, ball);
+            UpdateBall(go, ballStatus);
 
+            int lastSessionId = (int)ballStatus[ProtoField.SESSION_ID];
             //2.处理pending_state
-            ServerReconciliation();
+            ServerReconciliation(lastSessionId);
         }
         else
         {
-            //3.为其他球准备插值数据
-            ReadyInterpolationData();
+            //3. 为其他球准备插值数据
+            ReadyInterpolationData(ballStatus);
         }
+    }
+
+    private void ServerReconciliation(int lastSessionId)
+    {
+        for (var node = pedingInput.First; node != null;)
+        {
+            var nextNode = node.Next;
+            int sessionId = (int)node.Value[ProtoField.SESSION_ID];
+            //删除所有已确认的服务器输入
+            if (sessionId <= lastSessionId)
+            {
+                pedingInput.Remove(node);
+            }
+            else
+            {
+                ApplyInput(node.Value);
+            }
+
+            node = nextNode;
+        }
+    }
+
+    private void ReadyInterpolationData(Dictionary<ProtoField, object> ballStatus)
+    {
+        int id = (int)ballStatus[ProtoField.BALL_ID];
+        long now = GameProto.Now();
+        float x = (float)ballStatus[ProtoField.BALL_X];
+        float y = (float)ballStatus[ProtoField.BALL_Y];
+
+        if (!otherBallPosBuffer.ContainsKey(id))
+        {
+            List<Dictionary<ProtoField, object>> posBuffer = new List<Dictionary<ProtoField, object>>();
+            otherBallPosBuffer[id] = posBuffer;
+        }
+        var buffer = otherBallPosBuffer[id];
+
+        Dictionary<ProtoField, object> otherBallPosInfo = new Dictionary<ProtoField, object>();
+        otherBallPosInfo[ProtoField.TIME_STAMP] = now;
+        otherBallPosInfo[ProtoField.BALL_X] = x;
+        otherBallPosInfo[ProtoField.BALL_Y] = y;
+
+        buffer.Add(otherBallPosInfo);
+    }
+
+    private void DoEat(Dictionary<ProtoField, object> message)
+    {
+        int bid = (int)message[ProtoField.BALL_ID];
+        int fid = (int)message[ProtoField.FOOD_ID];
+        if (bid == playerBallId) //本玩家的吃
+        {
+            //更新ball
+            if (ballRunDict.ContainsKey(bid)) //本文家存活则更新
+                UpdateBall(playerBall, message);
+
+            //更新food
+            int code = (int)message[ProtoField.REQUEST_CODE];
+            if (code == 1) //请求失败 原因：被其他玩家吃了，坐标不对，本玩家已经死亡
+            {
+                if (foodRunDict.ContainsKey(fid))
+                    foodRunDict[fid].SetActive(true);
+            }
+            else //请求成功
+            {
+                if (foodRunDict.ContainsKey(fid))
+                {
+                    Destroy(foodRunDict[fid]);
+                    foodRunDict.Remove(fid);
+                }
+                //玩家死亡，只更新分数
+                int score = (int)message[ProtoField.BALL_SCORE];
+                ballScoreDict[bid] = score;
+            }
+
+            //处理pending
+            int lastSessionId = (int)message[ProtoField.SESSION_ID];
+            ServerReconciliation(lastSessionId);
+        }
+        else //其他玩家球的吃 , 一定是请求成功
+        {
+            Debug.Assert((int)message[ProtoField.REQUEST_CODE] == 0);
+
+            if (ballRunDict.ContainsKey(bid))//其他玩家若存活则延迟更新
+                StartCoroutine(LagUpdateBall(bid, serverUpdateRate));
+            else    //否则，只更新分数
+            {
+                int score = (int)message[ProtoField.BALL_SCORE];
+                StartCoroutine(LagUpdateScore(bid, score));
+            }
+
+            if (foodRunDict.ContainsKey(fid))//延迟删除food
+                StartCoroutine(LagRemoveFood(fid, serverUpdateRate));
+        }
+    }
+
+    private IEnumerator LagUpdateScore(int bid, int score)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
+        ballScoreDict[bid] = score;
+    }
+
+    private IEnumerator LagRemoveFood(int fid, int serverUpdateRate)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
+        Destroy(foodRunDict[fid]);
+        foodRunDict.Remove(fid);
+    }
+
+    private IEnumerator LagUpdateBall(int bid, int serverUpdateRate)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
 
         throw new NotImplementedException();
     }
 
-    private void ReadyInterpolationData()
+    private void DoKill(Dictionary<ProtoField, object> message)
     {
         throw new NotImplementedException();
     }
 
-    private void ServerReconciliation()
+    private void DoKick(Dictionary<ProtoField, object> message)
     {
         throw new NotImplementedException();
     }
+
+    private void DoLeave(Dictionary<ProtoField, object> message)
+    {
+        throw new NotImplementedException();
+    }
+
 
     //进入游戏场景
     private IEnumerator Enter(Action onEnterSuccess)

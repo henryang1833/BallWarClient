@@ -147,10 +147,10 @@ public class GameProto
                     message[ProtoField.BALL_SCORE] = int.Parse(parts[8]);
 
                     message[ProtoField.FOOD_ID] = int.Parse(parts[9]);
-                    message[ProtoField.FOOD_X] = float.Parse(parts[10]);
-                    message[ProtoField.FOOD_Y] = float.Parse(parts[11]);
-                    message[ProtoField.FOOD_SIZE] = float.Parse(parts[12]);
-                    message[ProtoField.FOOD_SCORE] = int.Parse(parts[13]);
+                    // message[ProtoField.FOOD_X] = float.Parse(parts[10]);
+                    // message[ProtoField.FOOD_Y] = float.Parse(parts[11]);
+                    // message[ProtoField.FOOD_SIZE] = float.Parse(parts[12]);
+                    // message[ProtoField.FOOD_SCORE] = int.Parse(parts[13]);
 
                 }
                 break;
