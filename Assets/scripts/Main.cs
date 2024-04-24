@@ -130,21 +130,28 @@ public class Main : MonoBehaviour
         catch (SocketException e)
         {
             Debug.LogError($"Socket Exception: {e.ToString()}");
-            Debug.LogError("网络连接不成功，请检查网络!");
             // todo:弹出提示，网络连接不成功，请检查网络
-            OnGameError();
+            OnGameError("网络连接不成功，请检查网络!");
         }
     }
     //运行出错处理
-    private void OnGameError()
+    private void OnGameError(string errInfo)
     {
-        throw new NotImplementedException();
+        Debug.LogError(errInfo);
+        game_status = GAME_STATUS.LOG_OUT;
+        isDoing = false;
     }
 
     //断开与服务器的连接
     private void DisConnectToServer()
     {
-        throw new NotImplementedException();
+        if(socket==null)
+        {
+            Debug.LogError("DisConnectToServer:socket==null");
+            return;
+        }
+        socket.Shutdown(SocketShutdown.Both);
+        socket.Close();
     }
 
     //客户端游戏世界各参数更新
@@ -156,12 +163,31 @@ public class Main : MonoBehaviour
         ProcessUserInput();
         //3.插值
         Interpolation();
-        throw new NotImplementedException();
     }
 
     private void Interpolation()
     {
-        throw new NotImplementedException();
+        long renderStamp = GameProto.Now() - 1000 / serverUpdateRate;
+        foreach (var pair in otherBallPosBuffer)
+        {
+            if (!ballRunDict.ContainsKey(pair.Key))
+                continue;
+            var buffer = pair.Value;
+            long t0 = (long)buffer[0][ProtoField.TIME_STAMP];
+            long t1 = (long)buffer[1][ProtoField.TIME_STAMP];
+            if (buffer.Count >= 2 && t0 <= renderStamp && renderStamp <= t1)
+            {
+                float x0 = (float)buffer[0][ProtoField.BALL_X];
+                float x1 = (float)buffer[1][ProtoField.BALL_X];
+                float y0 = (float)buffer[0][ProtoField.BALL_Y];
+                float y1 = (float)buffer[1][ProtoField.BALL_Y];
+
+                float x = x0 + (x1 - x0) * (renderStamp - t0) / (t1 - t0);
+                float y = y0 + (y1 - y0) * (renderStamp - t0) / (t1 - t0);
+
+                ballRunDict[pair.Key].transform.position = new Vector2(x, y);
+            }
+        }
     }
 
     private void ProcessUserInput()
@@ -575,18 +601,24 @@ public class Main : MonoBehaviour
         int bid = (int)message[ProtoField.BALL_ID];
         int fid = (int)message[ProtoField.FOOD_ID];
         int code = (int)message[ProtoField.REQUEST_CODE];
-        if (code == 1) //未发生，一定是本玩家球
+        if (code == 1) //未发生，一定有本玩家球
         {
-            Debug.Assert(bid == playerBallId);
             //更新ball
-            if (ballRunDict.ContainsKey(bid)) //本文家存活则更新
+            if (ballRunDict.ContainsKey(bid))
+            {//本文家存活则更新
                 UpdateBall(playerBall, message);
-            //恢复second ball
-            if (foodRunDict.ContainsKey(fid))
-                foodRunDict[fid].SetActive(true);
+                playerBall.SetActive(true);
+            }
+            //更新foodball
+            if (ballRunDict.ContainsKey(fid))
+            {//本文家存活则更新
+                UpdateBall(ballRunDict[fid], message);
+                ballRunDict[fid].SetActive(true);
+            }
 
-            if (!ballRunDict.ContainsKey(bid))
+            if (!ballRunDict.ContainsKey(playerBallId))
                 return;
+
             //处理pending
             int lastSessionId = (int)message[ProtoField.SESSION_ID];
             ServerReconciliation(lastSessionId);
@@ -625,8 +657,17 @@ public class Main : MonoBehaviour
                     StartCoroutine(LagUpdateScore(bid, score));
                 }
 
-                if (ballRunDict.ContainsKey(fid))//延迟删除foodBall
-                    StartCoroutine(LagRemoveFoodBall(fid, serverUpdateRate));
+                if (ballRunDict.ContainsKey(fid))
+                {
+                    if (fid == playerBallId)
+                    {
+                        playerBall.GetComponent<SpriteRenderer>().enabled = false;
+                        ballRunDict.Remove(fid);
+                    }
+                    else
+                        //延迟删除foodBall
+                        StartCoroutine(LagRemoveFoodBall(fid, serverUpdateRate));
+                }
             }
         }
     }
@@ -672,7 +713,7 @@ public class Main : MonoBehaviour
                 onEnterSuccess();
                 break;
             case GameProto.STATUS_FAIL:
-                OnGameError();
+                OnGameError("enter fail！");
                 break;
             default:
                 throw new Exception("requestCode:got unexcepted code value");
@@ -716,7 +757,7 @@ public class Main : MonoBehaviour
                 onSucceeLogin();
                 break;
             case GameProto.STATUS_FAIL:
-                OnGameError();
+                OnGameError("login fail!");
                 break;
             default:
                 throw new Exception("requestCode:got unexcepted code value");
@@ -732,8 +773,7 @@ public class Main : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError(e.ToString());
-            OnGameError();
+            OnGameError(e.ToString());
         }
     }
 
@@ -746,8 +786,7 @@ public class Main : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError(e.ToString());
-            OnGameError();
+            OnGameError(e.ToString());
         }
     }
     // "hello\r\nworld\r\nhihi\r\ntian\r\nkong\r\n"
@@ -762,8 +801,7 @@ public class Main : MonoBehaviour
         }
         catch (Exception e)
         {
-            OnGameError();
-            Debug.LogError($"Receive failed: {e.Message}");
+            OnGameError($"Receive failed: {e.Message}");
         }
     }
 
@@ -809,8 +847,7 @@ public class Main : MonoBehaviour
         }
         catch (Exception e)
         {
-            OnGameError();
-            Debug.Log($"Receive callback failed: {e.Message}");
+            OnGameError($"Receive callback failed: {e.Message}");
         }
     }
 
@@ -821,6 +858,5 @@ public class Main : MonoBehaviour
             socket.Shutdown(SocketShutdown.Both);
             socket.Close();
         }
-        throw new NotImplementedException();
     }
 }

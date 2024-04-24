@@ -207,8 +207,8 @@ public class GameProto
         // Unix纪元开始时间
         DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        // 计算从1970年1月1日至今的时间差（毫秒数）
-        long timestamp = (long)(now - epoch).TotalSeconds;
+        // 计算从1970年1月1日至今的时间差（秒数）
+        long timestamp = (long)(now - epoch).TotalMilliseconds;
         return timestamp;
     }
 
