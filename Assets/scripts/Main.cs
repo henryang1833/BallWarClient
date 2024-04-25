@@ -22,6 +22,7 @@ public class Main : MonoBehaviour
     private Queue<Dictionary<ProtoField, object>> messages;
 
     private string messageBuf;
+    private Dictionary<int, int> lastSessionIdDict;  //每个玩家的最后处理会话ID
     public enum GAME_STATUS
     {
         CONNECT_TO_GATE, LOG_IN, ENTER, RUNNING, LOG_OUT
@@ -64,6 +65,7 @@ public class Main : MonoBehaviour
         otherBallPosBuffer = new Dictionary<int, List<Dictionary<ProtoField, object>>>();
         game_status = GAME_STATUS.CONNECT_TO_GATE;
         isDoing = false;
+        lastSessionIdDict = new Dictionary<int, int>();
     }
 
     // Update is called once per frame
@@ -145,7 +147,7 @@ public class Main : MonoBehaviour
     //断开与服务器的连接
     private void DisConnectToServer()
     {
-        if(socket==null)
+        if (socket == null)
         {
             Debug.LogError("DisConnectToServer:socket==null");
             return;
@@ -355,6 +357,12 @@ public class Main : MonoBehaviour
                 case GameProto.PROTO_FOOD_LIST:
                     DoFoodList(message);
                     break;
+                case GameProto.PROTO_BALL_ADD:
+                    DoBallAdd(message);
+                    break;
+                case GameProto.PROTO_FOOD_ADD:
+                    DoFoodAdd(message);
+                    break;
                 case GameProto.PROTO_MOVE:
                     DoMove(message);
                     break;
@@ -376,6 +384,37 @@ public class Main : MonoBehaviour
         }
     }
 
+    private void DoFoodAdd(Dictionary<ProtoField, object> message)
+    {
+        StartCoroutine(LagAddFood(message));
+    }
+
+    private IEnumerator LagAddFood(Dictionary<ProtoField, object> message)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
+        int id = (int)message[ProtoField.FOOD_ID];
+        GameObject go = Instantiate(foodPrefab);
+        UpdateFood(go, message);
+        foodRunDict[id] = go;
+    }
+
+    private void DoBallAdd(Dictionary<ProtoField, object> message)
+    {
+        StartCoroutine(LagAddBall(message));
+    }
+
+    private IEnumerator LagAddBall(Dictionary<ProtoField, object> message)
+    {
+        yield return new WaitForSeconds(1.0f / serverUpdateRate);
+        int id = (int)message[ProtoField.BALL_ID];
+        if (id != playerBallId)
+        {
+            GameObject go = Instantiate(ballPrefab);
+            UpdateBall(go, message);
+            ballRunDict[id] = go;
+        }
+    }
+
     private void DoBallList(Dictionary<ProtoField, object> message)
     {
         Debug.Assert(message.ContainsKey(ProtoField.BLL_LIST));
@@ -389,7 +428,10 @@ public class Main : MonoBehaviour
             if (!ballRunDict.ContainsKey(id))
             {
                 if (id == playerBallId)
+                {
                     go = playerBall;
+                    go.GetComponent<SpriteRenderer>().enabled = true;
+                }
                 else
                     go = Instantiate(ballPrefab);
                 ballRunDict[id] = go;
@@ -457,21 +499,24 @@ public class Main : MonoBehaviour
 
     private void DoMove(Dictionary<ProtoField, object> ballStatus)
     {
-        Debug.Assert(ballStatus.Count == 8);
+        Debug.Assert(ballStatus.Count == 7);
         int id = (int)ballStatus[ProtoField.BALL_ID];
+
+        if (!lastSessionIdDict.ContainsKey(id))
+            lastSessionIdDict[id] = 0;
+
+        int lastSessionId = lastSessionIdDict[id];
+
+        if ((int)ballStatus[ProtoField.SESSION_ID] < lastSessionId)
+            return;
+
+        lastSessionIdDict[id] = (int)ballStatus[ProtoField.SESSION_ID];
+
         if (id == playerBallId)
         {
             //1. 依据权威值更新ball的状态
-            GameObject go;
-            if (!ballRunDict.ContainsKey(id))
-            {
-                go = Instantiate(ballPrefab);
-                ballRunDict[id] = go;
-            }
-            go = ballRunDict[id];
-            UpdateBall(go, ballStatus);
+            UpdateBall(playerBall, ballStatus);
 
-            int lastSessionId = (int)ballStatus[ProtoField.SESSION_ID];
             //2.处理pending_state
             ServerReconciliation(lastSessionId);
         }
@@ -526,8 +571,10 @@ public class Main : MonoBehaviour
 
     private void DoEat(Dictionary<ProtoField, object> message)
     {
+
         int bid = (int)message[ProtoField.BALL_ID];
         int fid = (int)message[ProtoField.FOOD_ID];
+        lastSessionIdDict[bid] = (int)message[ProtoField.SESSION_ID];
         if (bid == playerBallId) //本玩家的吃
         {
             //更新ball
@@ -600,6 +647,7 @@ public class Main : MonoBehaviour
     {
         int bid = (int)message[ProtoField.BALL_ID];
         int fid = (int)message[ProtoField.FOOD_ID];
+        lastSessionIdDict[bid] = (int)message[ProtoField.SESSION_ID];
         int code = (int)message[ProtoField.REQUEST_CODE];
         if (code == 1) //未发生，一定有本玩家球
         {
@@ -611,8 +659,15 @@ public class Main : MonoBehaviour
             }
             //更新foodball
             if (ballRunDict.ContainsKey(fid))
-            {//本文家存活则更新
-                UpdateBall(ballRunDict[fid], message);
+            {   //本文家存活则更新
+                //将食物信息转为球信息
+                Dictionary<ProtoField, object> ballMessage = new Dictionary<ProtoField, object>();
+                ballMessage[ProtoField.BALL_ID] = message[ProtoField.FOOD_ID];
+                ballMessage[ProtoField.BALL_X] = message[ProtoField.FOOD_X];
+                ballMessage[ProtoField.BALL_Y] = message[ProtoField.FOOD_Y];
+                ballMessage[ProtoField.BALL_SIZE] = message[ProtoField.FOOD_SIZE];
+                ballMessage[ProtoField.BALL_SCORE] = message[ProtoField.FOOD_SCORE];
+                UpdateBall(ballRunDict[fid], ballMessage);
                 ballRunDict[fid].SetActive(true);
             }
 
@@ -630,7 +685,7 @@ public class Main : MonoBehaviour
                 if (ballRunDict.ContainsKey(bid)) //本文家存活则更新
                     UpdateBall(playerBall, message);
 
-                //更新foodBall
+                //删除foodBall
                 if (ballRunDict.ContainsKey(fid))
                 {
                     Destroy(ballRunDict[fid]);
@@ -659,7 +714,7 @@ public class Main : MonoBehaviour
 
                 if (ballRunDict.ContainsKey(fid))
                 {
-                    if (fid == playerBallId)
+                    if (fid == playerBallId) //本玩家球被吃
                     {
                         playerBall.GetComponent<SpriteRenderer>().enabled = false;
                         ballRunDict.Remove(fid);
