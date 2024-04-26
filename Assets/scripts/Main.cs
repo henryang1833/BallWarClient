@@ -66,6 +66,7 @@ public class Main : MonoBehaviour
         game_status = GAME_STATUS.CONNECT_TO_GATE;
         isDoing = false;
         lastSessionIdDict = new Dictionary<int, int>();
+        serverUpdateRate = 50;
     }
 
     // Update is called once per frame
@@ -379,7 +380,7 @@ public class Main : MonoBehaviour
                     DoKick(message);
                     return;
                 default:
-                    throw new Exception("got unexcepted proto type");
+                    throw new Exception($"got unexcepted proto type:{message[ProtoField.PROTO_TYPE]}");
             }
         }
     }
@@ -453,7 +454,7 @@ public class Main : MonoBehaviour
         Vector2 pos = new Vector2(x, y);
 
         go.transform.position = pos;
-        go.transform.localScale = Vector2.one * size;
+        go.transform.localScale = new Vector3(size,size,1);
         go.name = $"{ballPrefab.name}_{id}";
 
         ballScoreDict[id] = score;
@@ -812,7 +813,7 @@ public class Main : MonoBehaviour
                 onSucceeLogin();
                 break;
             case GameProto.STATUS_FAIL:
-                OnGameError("login fail!");
+                OnGameError($"login fail!");
                 break;
             default:
                 throw new Exception("requestCode:got unexcepted code value");
@@ -825,10 +826,11 @@ public class Main : MonoBehaviour
         {
             byte[] byteData = Encoding.ASCII.GetBytes(data);
             socket.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(SendCallback), socket);
+            Debug.Log("Send:" + data);
         }
         catch (Exception e)
         {
-            OnGameError(e.ToString());
+            OnGameError($"原因:\n{e.Message}\n位置:\n{e.StackTrace}");
         }
     }
 
@@ -837,11 +839,11 @@ public class Main : MonoBehaviour
         try
         {
             int bytesSent = socket.EndSend(AR);
-            Debug.Log($"Sent {bytesSent} bytes to gate.");
+            Debug.Log($"Send {bytesSent} bytes to gate.");
         }
         catch (Exception e)
         {
-            OnGameError(e.ToString());
+            OnGameError($"原因:\n{e.Message}\n位置:\n{e.StackTrace}");
         }
     }
     // "hello\r\nworld\r\nhihi\r\ntian\r\nkong\r\n"
@@ -856,7 +858,7 @@ public class Main : MonoBehaviour
         }
         catch (Exception e)
         {
-            OnGameError($"Receive failed: {e.Message}");
+            OnGameError($"Receive failed: 原因:\n{e.Message}\n位置:\n{e.StackTrace}");
         }
     }
 
@@ -877,6 +879,13 @@ public class Main : MonoBehaviour
                 //提取出message并送入messages队列
                 string[] parts = messageBuf.Split(GameProto.separator);
 
+                Debug.Log("接收的消息：-------------------------------------------------");
+                foreach (var str in parts)
+                {
+                    Debug.Log($"str长度{str.Length},内容:{str}");
+                }
+                Debug.Log("结束--------------------------------------------------------");
+
                 Debug.Assert(parts != null && parts.Length > 0);
 
                 // 检查原始字符串是否以 \r\n 结尾
@@ -888,21 +897,17 @@ public class Main : MonoBehaviour
                     messages.Enqueue(message);
                 }
 
-                if (endsWithSeparator)
-                {
-                    messageBuf = "";
-                    Dictionary<ProtoField, object> message = GameProto.ToProtoData(parts[parts.Length - 1]);
-                    messages.Enqueue(message);
-                }
-                else
-                {
+                messageBuf = "";
+                if (!endsWithSeparator){
+                    
                     messageBuf = parts[parts.Length - 1];
+                    Debug.LogError($"!endsWithSeparator:{messageBuf}");
                 }
             }
         }
         catch (Exception e)
         {
-            OnGameError($"Receive callback failed: {e.Message}");
+            OnGameError($"Receive callback failed,原因:\n{e.Message}\n位置:\n{e.StackTrace}");
         }
     }
 
