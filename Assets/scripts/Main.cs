@@ -304,7 +304,11 @@ public class Main : MonoBehaviour
                     if (ballRunDict.ContainsKey(playerBallId)) //存活才移动预测
                     {
                         Transform transform = ballRunDict[playerBallId].transform;
-                        transform.Translate(new Vector2(inputX, inputY) * speed * deltaTime);
+                        float minEdge = transform.localScale.x/2 - 50f;
+                        float maxEdge = 50f - transform.localScale.x/2;
+                        float x = Math.Clamp(transform.position.x + inputX * speed * deltaTime, minEdge, maxEdge);
+                        float y = Math.Clamp(transform.position.y + inputY * speed * deltaTime, minEdge, maxEdge);
+                        transform.position = new Vector2(x, y);
                     }
                 }
                 break;
@@ -811,7 +815,7 @@ public class Main : MonoBehaviour
     //登录成功回调函数
     private void onLoginSuccess()
     {
-        uiManager.welcomePanel.SetActive(false);
+        uiManager.gameObject.SetActive(false);
         game_status = GAME_STATUS.ENTER;
         isDoing = false;
     }
