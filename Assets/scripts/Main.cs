@@ -18,6 +18,8 @@ public class Main : MonoBehaviour
     private int gatePort;
     private float speed;
     private int serverUpdateRate;
+
+    public UiManager uiManager;
     //消息队列
     private Queue<Dictionary<ProtoField, object>> messages;
 
@@ -52,7 +54,7 @@ public class Main : MonoBehaviour
     {
         playerName = "101";
         playerPass = "123";
-        gateIP = "192.168.3.113";
+        gateIP = "42.51.33.65";
         gatePort = 8001;
         messageBuf = "";
         playerBallId = int.Parse(playerName);
@@ -67,6 +69,7 @@ public class Main : MonoBehaviour
         isDoing = false;
         lastSessionIdDict = new Dictionary<int, int>();
         serverUpdateRate = 50;
+        speed = 1.5f;
     }
 
     // Update is called once per frame
@@ -84,13 +87,14 @@ public class Main : MonoBehaviour
             case GAME_STATUS.LOG_IN:
                 if (!isDoing)
                 {
-                    StartCoroutine(Login(onLoginSuccess));
+                    uiManager.goButton.interactable = true;
                     isDoing = true;
                 }
                 break;
             case GAME_STATUS.ENTER:
                 if (!isDoing)
                 {
+
                     StartCoroutine(Enter(OnEnterSuccess));
                     isDoing = true;
                 }
@@ -310,7 +314,13 @@ public class Main : MonoBehaviour
                     //1.更新分数
                     ballScoreDict[playerBallId] += foodScoreDict[foodId];
                     //2.更新大小
-                    playerBall.transform.localScale = Vector2.one * ballScoreDict[playerBallId] * 0.1f;
+                    playerBall.transform.localScale = Vector3.one * ballScoreDict[playerBallId] * 0.1f;
+                    // 设置宽度曲线
+                    AnimationCurve curve = new AnimationCurve();
+                    curve.AddKey(0.0f, ballScoreDict[playerBallId] * 0.1f); // 起始宽度为1
+                    curve.AddKey(1.0f, 0.0f); // 结束时宽度为0.5
+                    playerBall.GetComponent<TrailRenderer>().widthCurve = curve;
+                    playerBall.GetComponent<TrailRenderer>().time = ballScoreDict[playerBallId] * 0.1f;
                     //3.将food隐藏
                     foodRunDict[foodId].SetActive(false);
                 }
@@ -323,7 +333,12 @@ public class Main : MonoBehaviour
                         //1.更新分数
                         ballScoreDict[playerBallId] += ballScoreDict[ballId];
                         //2.更新大小
-                        playerBall.transform.localScale = Vector2.one * ballScoreDict[playerBallId] * 0.1f;
+                        playerBall.transform.localScale = Vector3.one * ballScoreDict[playerBallId] * 0.1f;
+                        AnimationCurve curve = new AnimationCurve();
+                        curve.AddKey(0.0f, ballScoreDict[playerBallId] * 0.1f); // 起始宽度为1
+                        curve.AddKey(1.0f, 0.0f); // 结束时宽度为0.5
+                        playerBall.GetComponent<TrailRenderer>().widthCurve = curve;
+                        playerBall.GetComponent<TrailRenderer>().time = ballScoreDict[playerBallId] * 0.1f;
                         //3.将food隐藏
                         ballRunDict[ballId].SetActive(false);
                     }
@@ -332,7 +347,12 @@ public class Main : MonoBehaviour
                         //1.更新分数
                         ballScoreDict[ballId] += ballScoreDict[playerBallId];
                         //2.更新大小
-                        ballRunDict[ballId].transform.localScale = Vector2.one * ballScoreDict[ballId] * 0.1f;
+                        ballRunDict[ballId].transform.localScale = Vector3.one * ballScoreDict[ballId] * 0.1f;
+                        AnimationCurve curve = new AnimationCurve();
+                        curve.AddKey(0.0f, ballScoreDict[ballId] * 0.1f); // 起始宽度为1
+                        curve.AddKey(1.0f, 0.0f); // 结束时宽度为0.5
+                        ballRunDict[ballId].GetComponent<TrailRenderer>().widthCurve = curve;
+                        ballRunDict[ballId].GetComponent<TrailRenderer>().time = ballScoreDict[ballId] * 0.1f;
                         //3.将food隐藏
                         playerBall.SetActive(false);
                     }
@@ -454,7 +474,12 @@ public class Main : MonoBehaviour
         Vector2 pos = new Vector2(x, y);
 
         go.transform.position = pos;
-        go.transform.localScale = new Vector3(size,size,1);
+        go.transform.localScale = new Vector3(size, size, 1);
+        AnimationCurve curve = new AnimationCurve();
+        curve.AddKey(0.0f, size); // 起始宽度为1
+        curve.AddKey(1.0f, 0); // 结束时宽度为0.5
+        go.GetComponent<TrailRenderer>().widthCurve = curve;
+        go.GetComponent<TrailRenderer>().time = size;
         go.name = $"{ballPrefab.name}_{id}";
 
         ballScoreDict[id] = score;
@@ -492,7 +517,7 @@ public class Main : MonoBehaviour
         Vector2 pos = new Vector2(x, y);
 
         go.transform.position = pos;
-        go.transform.localScale = Vector2.one * size;
+        go.transform.localScale = Vector3.one * size;
         go.name = $"{foodPrefab.name}_{id}";
 
         foodScoreDict[id] = score;
@@ -786,12 +811,13 @@ public class Main : MonoBehaviour
     //登录成功回调函数
     private void onLoginSuccess()
     {
+        uiManager.welcomePanel.SetActive(false);
         game_status = GAME_STATUS.ENTER;
         isDoing = false;
     }
 
     //客户端登录
-    private IEnumerator Login(Action onSucceeLogin)
+    private IEnumerator Login(Action onSucceeLogin, Action<string> onFailLogin)
     {
         //1.发送登录协议
         Send(GameProto.LoginProto(playerName, playerPass));
@@ -807,17 +833,23 @@ public class Main : MonoBehaviour
         Debug.Assert((string)message[ProtoField.PROTO_TYPE] == GameProto.PROTO_LOGIN);
 
         int requestCode = (int)message[ProtoField.REQUEST_CODE];
+        string reason = (string)message[ProtoField.REASON];
         switch (requestCode)
         {
             case GameProto.STATUS_SUCCESS:
                 onSucceeLogin();
                 break;
             case GameProto.STATUS_FAIL:
-                OnGameError($"login fail!");
+                onFailLogin(reason);
                 break;
             default:
                 throw new Exception("requestCode:got unexcepted code value");
         }
+    }
+
+    private void onFailLogin(string reason)
+    {
+        uiManager.tipText.text = reason;
     }
 
     void Send(string data)
@@ -898,8 +930,9 @@ public class Main : MonoBehaviour
                 }
 
                 messageBuf = "";
-                if (!endsWithSeparator){
-                    
+                if (!endsWithSeparator)
+                {
+
                     messageBuf = parts[parts.Length - 1];
                     Debug.LogError($"!endsWithSeparator:{messageBuf}");
                 }
@@ -918,5 +951,13 @@ public class Main : MonoBehaviour
             socket.Shutdown(SocketShutdown.Both);
             socket.Close();
         }
+    }
+
+    public void OnClickToSingIn(string userName, string passWord)
+    {
+        playerName = userName;
+        playerPass = passWord;
+        playerBallId = int.Parse(playerName);
+        StartCoroutine(Login(onLoginSuccess, onFailLogin));
     }
 }
